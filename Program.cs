@@ -42,7 +42,7 @@ while (true)
 
 void DownloadFileThread()
 {
-    Process.Start(new ProcessStartInfo("steamcmd", " +quit") { CreateNoWindow = true })?.WaitForExit();
+    SteamCmd.Initialize();
     while (true)
     {
         Thread.Sleep(1);
@@ -67,16 +67,8 @@ void DownloadFileThread()
 
 void DownloadFile(Command command)
 {
-    var process = Process.Start(new ProcessStartInfo("steamcmd", $"+login anonymous +workshop_download_item {command.AppId} {command.ItemId} +quit") {RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true});
-    if (process is null)
-        return;
-    process.WaitForExit();
-    var output = process.StandardOutput.ReadToEnd();
-    if (!output.ToLower().Contains("success"))
-    {
-        throw new Exception();
-    }
-    var pathString = output.Split('"').SkipLast(1).Last();
+    
+    var pathString = SteamCmd.Download(command);
 
     var filename = command.ItemName;
     var invalid = new string(Path.GetInvalidFileNameChars()) + new string(Path.GetInvalidPathChars());
@@ -100,6 +92,52 @@ void DownloadFile(Command command)
     };
     Notifications.Manager.ShowNotification(notification);
     Directory.Delete(pathString, true);
+}
+
+internal static class SteamCmd
+{
+    private static readonly Dictionary<string, bool> Memory = new();
+
+    static SteamCmd()
+    {
+        Process.Start(new ProcessStartInfo("steamcmd", " +quit") { CreateNoWindow = true })?.WaitForExit();
+    }
+
+    public static void Initialize()
+    {
+
+    }
+
+    public static string Download(Command command)
+    {
+        var output = RunCommand($"workshop_download_item {command.AppId} {command.ItemId}");
+        if (!output.ToLower().Contains("success"))
+        {
+            throw new Exception();
+        }
+        var pathString = output.Split('"').SkipLast(1).Last();
+        return pathString;
+    }
+    
+    public static bool IsAppAvailable(string appId)
+    {
+        if (Memory.TryGetValue(appId, out var result))
+            return result;
+
+        var output = RunCommand($"licenses_for_app {appId}");
+        result = Memory[appId] = output.Contains("packageID");
+        return result;
+    }
+
+    private static string RunCommand(string command)
+    {
+        var process = Process.Start(new ProcessStartInfo("steamcmd", $"+login anonymous +{command} +quit") { RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true });
+        if (process is null)
+            throw new Exception();
+        process.WaitForExit();
+        var output = process.StandardOutput.ReadToEnd();
+        return output;
+    }
 }
 
 internal static class Notifications
@@ -142,14 +180,32 @@ internal class ReceiveCommandBehaviour : WebSocketBehavior
         if (jsonObject is null)
             return;
 
-        Commands.Enqueue(jsonObject);
+        switch (jsonObject.ActionID)
+        {
+            case 0:
+                AddCommand(jsonObject);
+                break;
+            case 1:
+                CheckApp(jsonObject);
+                break;
+        }
+    }
+
+    private static void AddCommand(Command command)
+    {
+        Commands.Enqueue(command);
         var notification = new Notification
         {
             Title = "Download queued",
-            Body = jsonObject.ItemName
+            Body = command.ItemName
         };
         Notifications.Manager.ShowNotification(notification);
     }
+
+    private void CheckApp(Command command)
+    {
+        Send(SteamCmd.IsAppAvailable(command.AppId) ? "yes" : "no");
+    }
 }
 
-internal record Command(string AppId, string ItemId, string ItemName);
+internal record Command(string AppId, string ItemId, string ItemName, int ActionID);
