@@ -13,7 +13,17 @@ using SteamCMD.Properties;
 using WebSocketSharp;
 using WebSocketSharp.Server;
 
-File.WriteAllBytes(Path.Combine(AppContext.BaseDirectory, "steamcmd.exe"), Resources.steamcmd);
+Process.GetProcessesByName("SteamCMDTool").Where(p => p.Id != Process.GetCurrentProcess().Id).ToList().ForEach(p => p.Kill(true));
+
+try
+{
+    File.WriteAllBytes(Path.Combine(AppContext.BaseDirectory, "steamcmd.exe"), Resources.steamcmd);
+}
+catch
+{
+    Notifications.Send("Error!", "steamcmd copy failed");
+}
+
 
 var path = Path.Combine(AppContext.BaseDirectory, Assembly.GetExecutingAssembly().GetName().Name ?? "steamcmdtool");
 var rk = Registry.CurrentUser.OpenSubKey
@@ -55,12 +65,7 @@ void DownloadFileThread()
         }
         catch
         {
-            var notification = new Notification
-            {
-                Title = "Download failed",
-                Body = command.ItemName
-            };
-            Notifications.Manager.ShowNotification(notification);
+            Notifications.Send("Download failed", command.ItemName);
         }
     }
 }
@@ -85,12 +90,7 @@ void DownloadFile(Command command)
     }
     ZipFile.CreateFromDirectory(pathString, fineName + ".zip");
     
-    var notification = new Notification
-    {
-        Title = "Download ended",
-        Body = command.ItemName
-    };
-    Notifications.Manager.ShowNotification(notification);
+    Notifications.Send("Download ended", command.ItemName);
     Directory.Delete(pathString, true);
 }
 
@@ -142,7 +142,7 @@ internal static class SteamCmd
 
 internal static class Notifications
 {
-    public static readonly INotificationManager Manager;
+    private static readonly INotificationManager Manager;
 
     private static INotificationManager CreateManager()
     {
@@ -167,6 +167,16 @@ internal static class Notifications
     {
         Manager = CreateManager();
         Manager.Initialize().GetAwaiter().GetResult();
+    }
+
+    public static void Send(string title, string @base)
+    {
+        var notification = new Notification
+        {
+            Title = title,
+            Body = @base
+        };
+        Manager.ShowNotification(notification);
     }
 }
 
@@ -194,12 +204,7 @@ internal class ReceiveCommandBehaviour : WebSocketBehavior
     private static void AddCommand(Command command)
     {
         Commands.Enqueue(command);
-        var notification = new Notification
-        {
-            Title = "Download queued",
-            Body = command.ItemName
-        };
-        Notifications.Manager.ShowNotification(notification);
+        Notifications.Send("Download queued", command.ItemName);
     }
 
     private void CheckApp(Command command)
