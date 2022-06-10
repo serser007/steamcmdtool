@@ -87,6 +87,9 @@ void DownloadFileThread()
         }
         catch
         {
+            if (command.ActionID == (int) Actions.download)
+                ReceiveCommandBehaviour.Commands.EnqueueFirst(command with { ActionID = (int) Actions.downloadAlternative});
+            else
             Notifications.Send("Download failed", command.ItemName);
         }
         ReceiveCommandBehaviour.Current.Value = null;
@@ -111,28 +114,47 @@ void DownloadFile(Command command)
     {
         fineName = name + $"({i++})";
     }
-    ZipFile.CreateFromDirectory(pathString, fineName + ".zip");
-    
+
+    fineName += ".zip";
+
+    if (pathString.EndsWith(".zip"))
+    {
+        File.Move(pathString, fineName);
+    }
+    else {
+        ZipFile.CreateFromDirectory(pathString, fineName);
+        Directory.Delete(pathString, true);
+    }
     Notifications.Send("Download ended", command.ItemName);
-    Directory.Delete(pathString, true);
+ 
 }
 
 internal static class SteamCmd
 {
     private static readonly Dictionary<string, bool> Memory = new();
-
+    private static string DownloadsFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Downloads");
     static SteamCmd()
     {
         Process.Start(new ProcessStartInfo("steamcmd", " +quit") { CreateNoWindow = true })?.WaitForExit();
+        Directory.CreateDirectory(DownloadsFolder);
     }
 
     public static void Initialize()
     {
-
+        
     }
 
     public static string Download(Command command)
     {
+        if (command.ActionID == (int)Actions.downloadAlternative)
+        {
+            var request = GetDownloadRequest(command.AppId, command.ItemId);
+            var file = File.Create(Path.Combine(DownloadsFolder, $"{command.AppId}_{command.ItemId}.zip"));
+            request.GetResponseStream().CopyTo(file);
+            file.Close();
+            return file.Name;
+        }
+
         var output = RunCommand($"workshop_download_item {command.AppId} {command.ItemId}");
         if (!output.ToLower().Contains("success"))
         {
@@ -150,6 +172,25 @@ internal static class SteamCmd
         var output = RunCommand($"licenses_for_app {appId}");
         result = Memory[appId] = output.Contains("packageID");
         return result;
+    }
+
+    public static bool IsModAvailable(string appId, string itemId)
+    {
+     return       GetDownloadRequest(appId, itemId) != null;
+     
+    }
+
+    private static WebResponse? GetDownloadRequest(string appId, string itemId)
+    {
+        for (int idx = -1 ; idx < 17; idx ++)
+        {
+            var s = idx == -1 ? "" : idx.ToString();
+            try { 
+                return WebRequest.CreateHttp($"http://workshop{s}.abcvg.info/archive/{appId}/{itemId}.zip").GetResponse();
+            }
+            catch { }
+        }
+        return null;
     }
 
     private static string RunCommand(string command)
@@ -217,10 +258,10 @@ internal class ReceiveCommandBehaviour : WebSocketBehavior
 
         switch (jsonObject.ActionID)
         {
-            case 0:
+            case (int)Actions.download or (int) Actions.downloadAlternative:
                 AddCommand(jsonObject);
                 break;
-            case 1:
+            case (int)Actions.check:
                 CheckApp(jsonObject);
                 break;
         }
@@ -234,7 +275,7 @@ internal class ReceiveCommandBehaviour : WebSocketBehavior
 
     private void CheckApp(Command command)
     {
-        Send(SteamCmd.IsAppAvailable(command.AppId) ? "yes" : "no");
+        Send(SteamCmd.IsAppAvailable(command.AppId) ? "yes" : SteamCmd.IsModAvailable(command.AppId, command.ItemId) ? "~" : "no");
     }
 }
 
@@ -278,6 +319,14 @@ internal class ReactQueue<T>: IEnumerable<T>, IEnumerable, IReadOnlyCollection<T
     {
         _.WaitOne();
         queue.AddLast(t);
+        OnChange?.Invoke();
+        _.Set();
+    }
+
+    public void EnqueueFirst(T t)
+    {
+        _.WaitOne();
+        queue.AddFirst(t);
         OnChange?.Invoke();
         _.Set();
     }
@@ -369,10 +418,10 @@ internal class QueueForm : Form
         int i = 0;
 
         if (ReceiveCommandBehaviour.Current.Value != null)
-            label.Text = ($"current: {ReceiveCommandBehaviour.Current.Value.ItemName}");
+            label.Text = ($"current: [{(ReceiveCommandBehaviour.Current.Value.ActionID == (int)Actions.download ? "SteamCMD" : "download Cache")}] {ReceiveCommandBehaviour.Current.Value.ItemName}");
         else
             label.Text = "";
-        ReceiveCommandBehaviour.Commands.Select(c => $"{++i} {c.ItemName}").ToList().ForEach(_ =>listbox.Items.Add(_));
+        ReceiveCommandBehaviour.Commands.Select(c => $"{++i} [{(c.ActionID==(int)Actions.download ? "SteamCMD" : "download Cache")}] {c.ItemName}").ToList().ForEach(_ =>listbox.Items.Add(_));
 
         if (listbox.SelectedIndex == -1)
         { 
@@ -385,6 +434,13 @@ internal class QueueForm : Form
         ReceiveCommandBehaviour.Commands.OnChange -= UpdateUI;
         ReceiveCommandBehaviour.Current.OnChange -= UpdateUI;
     }
+}
+
+internal enum Actions
+{
+    download = 0,
+    check = 1,
+    downloadAlternative = 2
 }
 
 internal record Command(string AppId, string ItemId, string ItemName, int ActionID);

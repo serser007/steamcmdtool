@@ -57,10 +57,18 @@ $(document).ready(function()
 			  $("#steamdownload1").attr("style", "")
 			  $("#steamdownload1").attr("value", "Download from SteamCmd")
 			  $("#steamdownload1").attr("class", "btn_medium  btn_border_2px btn_green_white_innerfade")
+			  data.ActionID = 0
 		  }
 		  if (event.data == "no") {
 			  $("#steamdownload1").attr("value", "Game is not availible")
 			  $("#steamdownload1").attr("style", "pointer-events:none;")
+		  }
+		  
+		  if (event.data == "~") {
+			  $("#steamdownload1").attr("style", "filter: hue-rotate(180deg)")
+			  $("#steamdownload1").attr("value", "Download from .download Cache")
+			  $("#steamdownload1").attr("class", "btn_medium  btn_border_2px btn_green_white_innerfade")
+			  data.ActionID = 2
 		  }
 		}
 		
@@ -75,7 +83,6 @@ $(document).ready(function()
 		
 		$("#steamdownload1").click(function()
 		{
-			data.ActionID = 0
 			ws.send(JSON.stringify(data))
 		});
 	}

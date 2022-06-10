@@ -7,9 +7,8 @@
       "matches": [ "*://steamcommunity.com/sharedfiles/filedetails/?id=*", "*://steamcommunity.com/workshop/filedetails/?id=*" ]
    }  ],
    "description": "Download steam workshop files via steamcmd",
-   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApEAbIZOrobynKd7uj7vJ5WhBOYvDdRwYDuYDOybmjiMxn9xGp75W2rCPmi6hyKoRhKvkLxNQNmy+gAg4iIvWZLQbSJLwupn9VaFoWodFvR7eXt6PKwPemzF8z5411uddYA2UTxfEyCFoZvdXILjgmvZhkeBcwIv2Z5PNCdmb+88YYYI+FAcStKge+tNsrNOZbHllYilgfGJAPdaoqCozVZ4CYksG8JAxP+wRch+tAjpInD3wXJ9t8i3U54PQ+RIkbdlOqy4rrWHA79HbIHrwrYE6fbc9MQaqAXDs/hjbDGtHf375jnC70dAJjRytaoDy9TSKCH/2nQam00J81QU8PwIDAQAB",
-   "manifest_version": 3,
+   "manifest_version": 2,
    "name": "Steam Workshop Downloader",
    "permissions": [   ],
-   "version": "0.0.1"
+   "version": "0.0.4.0"
 }
