@@ -41,6 +41,11 @@ new Thread(() => {
         },
         Visible = true
     };
+
+    if (SteamCMD.UpdateService.CheckForUpdates() && MessageBox.Show(SteamCMD.UpdateService.GetVersion(), "An Update is Available, open?", MessageBoxButtons.YesNo) == DialogResult.Yes)
+        SteamCMD.UpdateService.OpenURI();
+
+
     Application.Run();
 }) {IsBackground = true}.Start();
 
@@ -238,7 +243,7 @@ internal static class Notifications
         var notification = new Notification
         {
             Title = title,
-            Body = @base
+            Body = @base,
         };
         Manager.ShowNotification(notification);
     }
