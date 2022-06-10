@@ -26,7 +26,7 @@ namespace SteamCMD
         public static void OpenURI()
         {
             try { 
-                Process.Start($"cmd", $"/min /q /c start {Uri}");
+                Process.Start(new ProcessStartInfo($"cmd", $"/min /q /c start {Uri}") { CreateNoWindow = true });
             }
             catch
             {
