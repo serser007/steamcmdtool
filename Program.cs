@@ -1,6 +1,8 @@
-﻿using System.Diagnostics;
+﻿using System.Collections;
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Net;
+using System.Net.Mime;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -13,6 +15,7 @@ using SteamCMD.Properties;
 using WebSocketSharp;
 using WebSocketSharp.Server;
 
+var isRunning = true;
 Process.GetProcessesByName("SteamCMDTool").Where(p => p.Id != Process.GetCurrentProcess().Id).ToList().ForEach(p => p.Kill(true));
 
 try
@@ -23,6 +26,24 @@ catch
 {
     Notifications.Send("Error!", "steamcmd copy failed");
 }
+
+new Thread(() => {
+    var trayIcon = new NotifyIcon()
+    {
+        Icon = Resources.Icon,
+        ContextMenuStrip = new ContextMenuStrip()
+        {
+            Items =
+            {
+                new ToolStripMenuItem("quque", null, new EventHandler((_, _) => { new QueueForm().Show(); }), "quque"),
+                new ToolStripMenuItem("close", null, new EventHandler((_, _) => { isRunning = false; }), "close"),
+            }
+        },
+        Visible = true
+    };
+    Application.Run();
+}) {IsBackground = true}.Start();
+
 
 
 var path = Path.Combine(AppContext.BaseDirectory, Assembly.GetExecutingAssembly().GetName().Name ?? "steamcmdtool");
@@ -45,7 +66,7 @@ var listener = new WebSocketServer(IPAddress.Parse("127.0.0.1"), 1024);
 listener.AddWebSocketService<ReceiveCommandBehaviour>("/");
 listener.Start();
 
-while (true)
+while (isRunning)
 {
    Thread.Sleep(1);
 }
@@ -59,6 +80,7 @@ void DownloadFileThread()
         if (!ReceiveCommandBehaviour.Commands.Any())
             continue;
         var command = ReceiveCommandBehaviour.Commands.Dequeue();
+        ReceiveCommandBehaviour.Current.Value = command;
         try
         {
             DownloadFile(command);
@@ -67,6 +89,7 @@ void DownloadFileThread()
         {
             Notifications.Send("Download failed", command.ItemName);
         }
+        ReceiveCommandBehaviour.Current.Value = null;
     }
 }
 
@@ -182,7 +205,9 @@ internal static class Notifications
 
 internal class ReceiveCommandBehaviour : WebSocketBehavior
 {
-    public static readonly Queue<Command> Commands = new ();
+    public static readonly ReactQueue<Command> Commands = new ();
+    public static ReactField<Command?> Current = new ReactField<Command?>();
+
     protected override void OnMessage(MessageEventArgs e)
     {
         var jsonObject = JsonSerializer.Deserialize<Command>(e.Data);
@@ -210,6 +235,155 @@ internal class ReceiveCommandBehaviour : WebSocketBehavior
     private void CheckApp(Command command)
     {
         Send(SteamCmd.IsAppAvailable(command.AppId) ? "yes" : "no");
+    }
+}
+
+internal class ReactField<T>
+{
+    private T t;
+    public event Action OnChange;
+    public T Value { get => t; set { t = value; OnChange?.Invoke(); } }
+}
+
+internal class ReactQueue<T>: IEnumerable<T>, IEnumerable, IReadOnlyCollection<T>, ICollection
+{
+    private AutoResetEvent _ = new AutoResetEvent(true);
+
+    public event Action OnChange;
+
+    private LinkedList<T> queue = new LinkedList<T>();
+    
+    public int Count => ((IReadOnlyCollection<T>)queue).Count;
+
+    public bool IsSynchronized => ((ICollection)queue).IsSynchronized;
+
+    public object SyncRoot => ((ICollection)queue).SyncRoot;
+
+    public void CopyTo(Array array, int index)
+    {
+        ((ICollection)queue).CopyTo(array, index);
+    }
+
+    public IEnumerator<T> GetEnumerator()
+    {
+        return ((IEnumerable<T>)queue).GetEnumerator();
+    }
+
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return ((IEnumerable)queue).GetEnumerator();
+    }
+
+    public void Enqueue(T t)
+    {
+        _.WaitOne();
+        queue.AddLast(t);
+        OnChange?.Invoke();
+        _.Set();
+    }
+
+    public void RemoveAt(int idx)
+    {
+        _.WaitOne();
+        queue.Remove(queue.ElementAt(idx));
+        OnChange?.Invoke();
+        _.Set();
+    }
+
+    public T Dequeue()
+    {
+        _.WaitOne();
+        var t = queue.First.Value;
+        queue.RemoveFirst();
+        OnChange?.Invoke();
+        _.Set();
+        return t;
+    }
+
+    public void Clear()
+    {
+        _.WaitOne();
+        queue.Clear();
+        OnChange?.Invoke();
+        _.Set();
+    }
+}
+
+internal class QueueForm : Form
+{
+    ListBox listbox;
+    Label label;
+    Button button;
+    public QueueForm()
+    {
+        Icon = Resources.Icon;
+        listbox = new ListBox()
+        { Dock = DockStyle.Fill};
+
+        button = new Button()
+        {
+            Text = "Remove",
+            Dock = DockStyle.Bottom,
+            Height = 33,
+            Visible = false
+        };
+        label = new Label()
+        {
+            Dock = DockStyle.Top,
+            Height = 33,
+            Visible = true
+        };
+
+        Controls.Add(listbox);
+        Controls.Add(button);
+        Controls.Add(label);
+        ReceiveCommandBehaviour.Commands.OnChange += UpdateUI;
+        ReceiveCommandBehaviour.Current.OnChange += UpdateUI;
+
+        UpdateUI();
+        
+        listbox.SelectedIndexChanged += (_, _) =>
+        {
+            button.Visible = listbox.SelectedIndex >= 0;
+        };
+        button.Click += RemoveElement;
+    }
+
+    private void RemoveElement(object? _, EventArgs __)
+    {
+        if (listbox.SelectedIndex == -1)
+            return;
+
+        ReceiveCommandBehaviour.Commands.RemoveAt(listbox.SelectedIndex);
+        button.Visible = false;
+    }
+
+    private void UpdateUI()
+    {
+        if (InvokeRequired)
+        {
+            Invoke(UpdateUI);
+            return;
+        }
+        listbox.Items.Clear();
+        int i = 0;
+
+        if (ReceiveCommandBehaviour.Current.Value != null)
+            label.Text = ($"current: {ReceiveCommandBehaviour.Current.Value.ItemName}");
+        else
+            label.Text = "";
+        ReceiveCommandBehaviour.Commands.Select(c => $"{++i} {c.ItemName}").ToList().ForEach(_ =>listbox.Items.Add(_));
+
+        if (listbox.SelectedIndex == -1)
+        { 
+            button.Visible = false;
+        }
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        ReceiveCommandBehaviour.Commands.OnChange -= UpdateUI;
+        ReceiveCommandBehaviour.Current.OnChange -= UpdateUI;
     }
 }
 
