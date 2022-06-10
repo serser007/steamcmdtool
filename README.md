@@ -3,7 +3,7 @@
 
    a. Chrome: unzip extension -> go to chrome://extensions/ -> enable developer mode -> install extension
    
-   b. Firefox: about:debugging#/runtime/this-firefox -> install extension
+   b. Firefox: https://addons.mozilla.org/ru/firefox/addon/steamcmdtool-bridge/ -> install extension
    
 2. Place steamcmdtool.exe into some folder (it will generate many files in its own directory)
 3. Run steamcmdtool.exe (it will be placed in autorun, initialization will take some time (1-3 min))
