@@ -1,44 +1,39 @@
-var patt=new RegExp("[0-9]{2,15}");
-var id = patt.exec(document.URL)[0];
-var patt2=new RegExp("app: ([0-9]*)");
-var patt3=new RegExp("\\?appid=([0-9]*)");
-
-var app = patt3.exec(document.body.innerHTML)[1];
-
-
-
-
-var realButton = document.getElementById("SubscribeItemBtn");
-
-// shorten the text in the box because it will be in the way
-realButton.parentNode.parentNode.getElementsByTagName("h1")[0].innerHTML = "Download/Subscribe to the right";
-
-var myButtonPosition = realButton.offsetWidth + 20;
-
-var button = document.createElement('div');
-
-button.innerHTML = `
-<input type="button" style="pointer-events:none;" class="btn_medium  btn_border_2px" value="connecting..." id="steamdownload1">
-<div id="result"></div>
-`
-
-// append the element after the real subscribe button
-if (realButton.nextSibling)
-{
-    realButton.parentNode.insertBefore(button, realButton.nextSibling);
-}
-else
-{
-    realButton.parentNode.appendChild(button);
-}
-
-
-
-
-
-
 $(document).ready(function()
 {
+	var patt=new RegExp("[0-9]{2,15}");
+	var id = patt.exec(document.URL)[0];
+	var patt2=new RegExp("app: ([0-9]*)");
+	var patt3=new RegExp("\\?appid=([0-9]*)");
+
+	var app = patt3.exec(document.body.innerHTML)[1];
+
+
+
+
+	var realButton = document.getElementById("SubscribeItemBtn");
+
+	// shorten the text in the box because it will be in the way
+	realButton.parentNode.parentNode.getElementsByTagName("h1")[0].innerHTML = "Download/Subscribe to the right";
+
+	var myButtonPosition = realButton.offsetWidth + 20;
+
+	var button = document.createElement('div');
+
+	button.innerHTML = `
+	<input type="button" style="pointer-events:none;" class="btn_medium  btn_border_2px" value="connecting..." id="steamdownload1">
+	<div id="result"></div>
+	`
+
+	// append the element after the real subscribe button
+	if (realButton.nextSibling)
+	{
+		realButton.parentNode.insertBefore(button, realButton.nextSibling);
+	}
+	else
+	{
+		realButton.parentNode.appendChild(button);
+	}
+	
 	data =  {
 					ItemId: id,
 					AppId: app,
